@@ -1,8 +1,8 @@
 {
-  "name": "excalidraw-dropbox",
+  "name": "excalidraw-collab",
   "version": "1.0.0",
   "private": true,
-  "description": "Standalone Dropbox-backed Excalidraw collaboration",
+  "description": "Real-time collaborative whiteboard built on Excalidraw",
   "workspaces": [
     "client",
     "server"
