@@ -113,8 +113,10 @@ export default function App() {
         )}
       >
         <MainMenu>
-          <MainMenu.DefaultItems.SaveAsImage />
+          <MainMenu.DefaultItems.LoadScene />
+          <MainMenu.DefaultItems.SaveToActiveFile />
           <MainMenu.DefaultItems.Export />
+          <MainMenu.DefaultItems.SaveAsImage />
           <MainMenu.DefaultItems.ClearCanvas />
           <MainMenu.DefaultItems.ToggleTheme />
           <MainMenu.DefaultItems.ChangeCanvasBackground />
