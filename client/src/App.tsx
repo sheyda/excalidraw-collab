@@ -4,15 +4,11 @@ import "@excalidraw/excalidraw/index.css";
 import type { ExcalidrawElement } from "@excalidraw/excalidraw/element/types";
 import type {
   AppState,
-  BinaryFiles,
   ExcalidrawImperativeAPI,
-  BinaryFileData,
 } from "@excalidraw/excalidraw/types";
 import { Collab, CollabState } from "./collab/Collab";
 import { CollabDialog } from "./components/CollabDialog";
-import { useDropboxAuth } from "./data/dropboxAuth";
 import { saveLocal, loadLocal } from "./data/localStorage";
-import { loadScene } from "./data/dropbox";
 
 function parseRoomHash(): { roomId: string; roomKey: string } | null {
   const hash = window.location.hash;
@@ -34,10 +30,8 @@ export default function App() {
     collaborators: [],
   });
 
-  const { isAuthenticated, userName, isLoading } = useDropboxAuth();
   const collabRef = useRef<Collab | null>(null);
 
-  // Initialize Collab singleton
   const collab = useMemo(() => {
     if (!collabRef.current) {
       collabRef.current = new Collab();
@@ -45,66 +39,30 @@ export default function App() {
     return collabRef.current;
   }, []);
 
-  // Wire up collab state changes
   useEffect(() => {
     collab.setOnStateChange(setCollabState);
   }, [collab]);
 
-  // Wire excalidraw API to collab
   useEffect(() => {
     if (excalidrawAPI) {
       collab.setExcalidrawAPI(excalidrawAPI);
     }
   }, [excalidrawAPI, collab]);
 
-  // Update username
-  useEffect(() => {
-    if (userName) {
-      collab.setUsername(userName);
-    }
-  }, [userName, collab]);
-
   // Auto-join room from URL hash
   useEffect(() => {
     const room = parseRoomHash();
-    if (room && isAuthenticated && excalidrawAPI && !collabState.isCollaborating) {
+    if (room && excalidrawAPI && !collabState.isCollaborating) {
+      const name = localStorage.getItem("excalidraw-collab-username") || "Anonymous";
+      collab.setUsername(name);
       collab
         .startSession(room.roomId, room.roomKey)
         .catch((err) => console.error("Failed to join room:", err));
-    } else if (room && !isAuthenticated && !isLoading) {
-      // Show dialog for auth
-      setCollabDialogOpen(true);
     }
-  }, [isAuthenticated, isLoading, excalidrawAPI, collab, collabState.isCollaborating]);
+  }, [excalidrawAPI, collab, collabState.isCollaborating]);
 
-  // Load initial data
-  const [initialData, setInitialData] = useState<{
-    elements?: ExcalidrawElement[];
-    appState?: Partial<AppState>;
-  } | null>(null);
-
-  useEffect(() => {
-    const room = parseRoomHash();
-    if (room && isAuthenticated) {
-      // Load from Dropbox
-      loadScene(room.roomId, room.roomKey)
-        .then((loaded) => {
-          if (loaded) {
-            setInitialData({
-              elements: loaded.elements,
-              appState: loaded.appState,
-            });
-          } else {
-            setInitialData({});
-          }
-        })
-        .catch(() => setInitialData({}));
-    } else {
-      // Load from localStorage
-      const local = loadLocal();
-      setInitialData(local || {});
-    }
-  }, [isAuthenticated]);
+  // Load initial data from localStorage
+  const [initialData] = useState(() => loadLocal() || {});
 
   const handleChange = useCallback(
     (elements: readonly ExcalidrawElement[], appState: AppState) => {
@@ -138,23 +96,6 @@ export default function App() {
   const openCollabDialog = useCallback(() => {
     setCollabDialogOpen(true);
   }, []);
-
-  if (initialData === null) {
-    return (
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          height: "100vh",
-          fontSize: 16,
-          color: "#666",
-        }}
-      >
-        Loading...
-      </div>
-    );
-  }
 
   return (
     <div style={{ width: "100%", height: "100vh" }}>

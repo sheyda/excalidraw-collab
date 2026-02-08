@@ -1,11 +1,9 @@
 import type { ExcalidrawElement } from "@excalidraw/excalidraw/element/types";
-import type { AppState, BinaryFileData } from "@excalidraw/excalidraw/types";
-import { getSceneVersion } from "./sceneUtils";
+import type { AppState } from "@excalidraw/excalidraw/types";
 import { SAVE_DEBOUNCE_MS } from "../constants";
 
-const ELEMENTS_KEY = "excalidraw-dropbox-local-elements";
-const APP_STATE_KEY = "excalidraw-dropbox-local-appstate";
-const FILES_KEY = "excalidraw-dropbox-local-files";
+const ELEMENTS_KEY = "excalidraw-collab-local-elements";
+const APP_STATE_KEY = "excalidraw-collab-local-appstate";
 
 let saveTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -46,33 +44,9 @@ export function loadLocal(): {
   }
 }
 
-export function saveLocalFiles(files: Map<string, BinaryFileData>): void {
-  try {
-    const obj: Record<string, BinaryFileData> = {};
-    for (const [id, data] of files) {
-      obj[id] = data;
-    }
-    localStorage.setItem(FILES_KEY, JSON.stringify(obj));
-  } catch (err) {
-    console.warn("Failed to save files to localStorage:", err);
-  }
-}
-
-export function loadLocalFiles(): Map<string, BinaryFileData> {
-  try {
-    const raw = localStorage.getItem(FILES_KEY);
-    if (!raw) return new Map();
-    const obj = JSON.parse(raw) as Record<string, BinaryFileData>;
-    return new Map(Object.entries(obj));
-  } catch {
-    return new Map();
-  }
-}
-
 export function clearLocal(): void {
   localStorage.removeItem(ELEMENTS_KEY);
   localStorage.removeItem(APP_STATE_KEY);
-  localStorage.removeItem(FILES_KEY);
 }
 
 function pickAppState(appState: Partial<AppState>): Partial<AppState> {

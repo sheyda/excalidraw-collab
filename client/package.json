@@ -10,14 +10,11 @@
   },
   "dependencies": {
     "@excalidraw/excalidraw": "^0.18.0",
-    "dropbox": "^10.34.0",
-    "pako": "^2.1.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "socket.io-client": "^4.7.4"
   },
   "devDependencies": {
-    "@types/pako": "^2.0.3",
     "@types/react": "^18.2.48",
     "@types/react-dom": "^18.2.18",
     "@vitejs/plugin-react": "^4.2.1",

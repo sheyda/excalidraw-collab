@@ -1,6 +1,5 @@
 import { io, Socket } from "socket.io-client";
 import { WS_SERVER_URL } from "../constants";
-import { encryptData, decryptData } from "../data/encryption";
 
 export type BroadcastedExcalidrawElement = {
   id: string;
@@ -16,10 +15,6 @@ export class Portal {
 
   onSceneData: ((data: BroadcastedExcalidrawElement[]) => void) | null = null;
   onUserChange: ((usernames: string[]) => void) | null = null;
-  onIdleState:
-    | ((data: { socketId: string; isIdle: boolean }) => void)
-    | null = null;
-  onUserFollow: ((payload: string) => void) | null = null;
 
   open(roomId: string, roomKey: string, username: string): Promise<void> {
     return new Promise((resolve, reject) => {
@@ -39,7 +34,6 @@ export class Portal {
 
       this.socket.once("init-room", () => {
         this.socket!.emit("join-room", roomId);
-        // Announce username
         this.socket!.emit("room-user-change", username);
         resolve();
       });
@@ -48,61 +42,42 @@ export class Portal {
         // We're the first — nothing to load from peers
       });
 
-      this.socket.on("client-broadcast", async (data: ArrayBuffer) => {
-        if (!this.roomKey || !this.onSceneData) return;
+      this.socket.on("client-broadcast", (data: string) => {
+        if (!this.onSceneData) return;
         try {
-          const decrypted = await decryptData(this.roomKey, data);
-          const json = new TextDecoder().decode(decrypted);
-          const parsed = JSON.parse(json);
-
+          const parsed = JSON.parse(data);
           if (parsed.type === "scene") {
             this.onSceneData(parsed.elements);
           }
         } catch (err) {
-          console.error("Failed to decrypt broadcast:", err);
+          console.error("Failed to parse broadcast:", err);
         }
       });
 
       this.socket.on("room-user-change", (usernames: string[]) => {
         this.onUserChange?.(usernames);
       });
-
-      this.socket.on(
-        "idle-state",
-        (data: { socketId: string; isIdle: boolean }) => {
-          this.onIdleState?.(data);
-        },
-      );
-
-      this.socket.on("user-follow", (payload: string) => {
-        this.onUserFollow?.(payload);
-      });
     });
   }
 
-  async broadcastScene(elements: readonly any[]): Promise<void> {
-    if (!this.socket || !this.roomId || !this.roomKey) return;
+  broadcastScene(elements: readonly any[]): void {
+    if (!this.socket || !this.roomId) return;
 
     const payload = JSON.stringify({
       type: "scene",
       elements,
     });
 
-    const encrypted = await encryptData(
-      this.roomKey,
-      new TextEncoder().encode(payload),
-    );
-
-    this.socket.emit("server-broadcast", this.roomId, encrypted);
+    this.socket.emit("server-broadcast", this.roomId, payload);
   }
 
-  async broadcastMouseLocation(data: {
+  broadcastMouseLocation(data: {
     pointer: { x: number; y: number };
     button: string;
     username: string;
     selectedElementIds: Record<string, boolean>;
-  }): Promise<void> {
-    if (!this.socket || !this.roomId || !this.roomKey) return;
+  }): void {
+    if (!this.socket || !this.roomId) return;
 
     const payload = JSON.stringify({
       type: "cursor",
@@ -110,15 +85,10 @@ export class Portal {
       socketId: this.socket.id,
     });
 
-    const encrypted = await encryptData(
-      this.roomKey,
-      new TextEncoder().encode(payload),
-    );
-
     this.socket.volatile.emit(
       "server-volatile-broadcast",
       this.roomId,
-      encrypted,
+      payload,
     );
   }
 
@@ -139,8 +109,6 @@ export class Portal {
     this.roomKey = null;
     this.onSceneData = null;
     this.onUserChange = null;
-    this.onIdleState = null;
-    this.onUserFollow = null;
   }
 
   get isOpen(): boolean {

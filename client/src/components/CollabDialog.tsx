@@ -1,6 +1,4 @@
-import React, { useState, useCallback, useEffect, useRef } from "react";
-import { useDropboxAuth } from "../data/dropboxAuth";
-import { shareRoom } from "../data/dropbox";
+import React, { useState, useCallback, useRef } from "react";
 import type { Collab } from "../collab/Collab";
 
 interface CollabDialogProps {
@@ -9,55 +7,42 @@ interface CollabDialogProps {
   collab: Collab;
 }
 
-type Step = "auth" | "create" | "active";
-
 export function CollabDialog({ open, onClose, collab }: CollabDialogProps) {
-  const { isAuthenticated, isLoading, userName, login } = useDropboxAuth();
-  const [step, setStep] = useState<Step>("auth");
   const [roomLink, setRoomLink] = useState<string | null>(null);
-  const [inviteEmail, setInviteEmail] = useState("");
-  const [inviteStatus, setInviteStatus] = useState<string | null>(null);
   const [isCreating, setIsCreating] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [username, setUsername] = useState(
+    () => localStorage.getItem("excalidraw-collab-username") || "",
+  );
   const linkInputRef = useRef<HTMLInputElement>(null);
 
-  // Determine current step
-  useEffect(() => {
-    if (collab.state.isCollaborating) {
-      const link = `${window.location.origin}/#room=${collab.state.roomId},${collab.state.roomKey}`;
-      setRoomLink(link);
-      setStep("active");
-    } else if (isAuthenticated) {
-      setStep("create");
-    } else {
-      setStep("auth");
-    }
-  }, [isAuthenticated, collab.state.isCollaborating]);
+  const isActive = collab.state.isCollaborating;
 
   const handleStartSession = useCallback(async () => {
+    const name = username.trim() || "Anonymous";
+    localStorage.setItem("excalidraw-collab-username", name);
+    collab.setUsername(name);
+
     setIsCreating(true);
     try {
-      const { roomId, roomKey } = await collab.createRoom();
-      collab.setUsername(userName || "Anonymous");
+      const { roomId, roomKey } = collab.createRoom();
       await collab.startSession(roomId, roomKey);
 
       const link = `${window.location.origin}/#room=${roomId},${roomKey}`;
       setRoomLink(link);
       window.location.hash = `room=${roomId},${roomKey}`;
-      setStep("active");
     } catch (err) {
       console.error("Failed to start session:", err);
       alert("Failed to start collaboration session. Please try again.");
     } finally {
       setIsCreating(false);
     }
-  }, [collab, userName]);
+  }, [collab, username]);
 
   const handleStopSession = useCallback(() => {
     collab.stopSession();
     window.location.hash = "";
     setRoomLink(null);
-    setStep("create");
   }, [collab]);
 
   const handleCopyLink = useCallback(() => {
@@ -69,21 +54,6 @@ export function CollabDialog({ open, onClose, collab }: CollabDialogProps) {
     }
   }, [roomLink]);
 
-  const handleInvite = useCallback(async () => {
-    if (!inviteEmail.trim() || !collab.state.roomId) return;
-    setInviteStatus("Sending invite...");
-    try {
-      await shareRoom(collab.state.roomId, [inviteEmail.trim()]);
-      setInviteStatus("Invite sent!");
-      setInviteEmail("");
-      setTimeout(() => setInviteStatus(null), 3000);
-    } catch (err) {
-      console.error("Failed to share room:", err);
-      setInviteStatus("Failed to send invite.");
-      setTimeout(() => setInviteStatus(null), 3000);
-    }
-  }, [inviteEmail, collab.state.roomId]);
-
   if (!open) return null;
 
   return (
@@ -94,30 +64,23 @@ export function CollabDialog({ open, onClose, collab }: CollabDialogProps) {
         </button>
         <h2 style={styles.title}>Live Collaboration</h2>
 
-        {isLoading ? (
-          <div style={styles.center}>
-            <p>Loading...</p>
-          </div>
-        ) : step === "auth" ? (
+        {!isActive ? (
           <div style={styles.center}>
             <p style={styles.text}>
-              Sign in with Dropbox to start collaborating.
-              <br />
-              Your drawings will be saved securely in your Dropbox.
+              Start a session to draw with others in real-time.
+              Share the generated link with your collaborators.
             </p>
-            <button style={styles.primaryButton} onClick={login}>
-              Sign in with Dropbox
-            </button>
-          </div>
-        ) : step === "create" ? (
-          <div style={styles.center}>
-            <p style={styles.text}>
-              Signed in as <strong>{userName}</strong>
-            </p>
-            <p style={styles.text}>
-              Start a collaboration session to draw with others in real-time.
-              A shareable link will be generated.
-            </p>
+            <div style={styles.field}>
+              <label style={styles.label}>Your name</label>
+              <input
+                style={styles.input}
+                type="text"
+                placeholder="Anonymous"
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && handleStartSession()}
+              />
+            </div>
             <button
               style={styles.primaryButton}
               onClick={handleStartSession}
@@ -127,18 +90,14 @@ export function CollabDialog({ open, onClose, collab }: CollabDialogProps) {
             </button>
           </div>
         ) : (
-          <div style={styles.activeSession}>
-            <p style={styles.text}>
-              Signed in as <strong>{userName}</strong>
-            </p>
-
+          <div>
             <div style={styles.linkSection}>
               <label style={styles.label}>Share this link:</label>
               <div style={styles.linkRow}>
                 <input
                   ref={linkInputRef}
                   style={styles.linkInput}
-                  value={roomLink || ""}
+                  value={roomLink || `${window.location.origin}/#room=${collab.state.roomId},${collab.state.roomKey}`}
                   readOnly
                   onClick={() => linkInputRef.current?.select()}
                 />
@@ -146,30 +105,6 @@ export function CollabDialog({ open, onClose, collab }: CollabDialogProps) {
                   {copied ? "Copied!" : "Copy"}
                 </button>
               </div>
-            </div>
-
-            <div style={styles.inviteSection}>
-              <label style={styles.label}>Invite via Dropbox:</label>
-              <div style={styles.linkRow}>
-                <input
-                  style={styles.linkInput}
-                  type="email"
-                  placeholder="collaborator@email.com"
-                  value={inviteEmail}
-                  onChange={(e) => setInviteEmail(e.target.value)}
-                  onKeyDown={(e) => e.key === "Enter" && handleInvite()}
-                />
-                <button
-                  style={styles.copyButton}
-                  onClick={handleInvite}
-                  disabled={!inviteEmail.trim()}
-                >
-                  Invite
-                </button>
-              </div>
-              {inviteStatus && (
-                <p style={styles.statusText}>{inviteStatus}</p>
-              )}
             </div>
 
             {collab.state.collaborators.length > 0 && (
@@ -182,6 +117,11 @@ export function CollabDialog({ open, onClose, collab }: CollabDialogProps) {
                 </p>
               </div>
             )}
+
+            <p style={styles.hint}>
+              To persist your drawing, use the menu to save the file to a shared
+              Dropbox folder (or any synced folder).
+            </p>
 
             <button style={styles.stopButton} onClick={handleStopSession}>
               Stop session
@@ -241,6 +181,19 @@ const styles: Record<string, React.CSSProperties> = {
     lineHeight: 1.5,
     margin: "0 0 16px",
   },
+  field: {
+    marginBottom: 16,
+    textAlign: "left" as const,
+  },
+  input: {
+    width: "100%",
+    padding: "8px 12px",
+    borderRadius: 6,
+    border: "1px solid #ddd",
+    fontSize: 14,
+    outline: "none",
+    boxSizing: "border-box" as const,
+  },
   primaryButton: {
     backgroundColor: "#6965db",
     color: "#fff",
@@ -252,11 +205,7 @@ const styles: Record<string, React.CSSProperties> = {
     cursor: "pointer",
     width: "100%",
   },
-  activeSession: {},
   linkSection: {
-    marginBottom: 16,
-  },
-  inviteSection: {
     marginBottom: 16,
   },
   collaboratorsSection: {
@@ -294,16 +243,16 @@ const styles: Record<string, React.CSSProperties> = {
     fontWeight: 500,
     whiteSpace: "nowrap" as const,
   },
-  statusText: {
-    fontSize: 12,
-    color: "#888",
-    marginTop: 6,
-    marginBottom: 0,
-  },
   collaboratorsList: {
     fontSize: 14,
     color: "#333",
     margin: 0,
+  },
+  hint: {
+    fontSize: 13,
+    color: "#888",
+    lineHeight: 1.4,
+    margin: "0 0 16px",
   },
   stopButton: {
     backgroundColor: "#e74c3c",
@@ -315,6 +264,5 @@ const styles: Record<string, React.CSSProperties> = {
     fontWeight: 600,
     cursor: "pointer",
     width: "100%",
-    marginTop: 8,
   },
 };
